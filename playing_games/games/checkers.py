@@ -1,7 +1,11 @@
 import numpy as np
 from random import choice
 from time import sleep
+import logging
 
+"""
+TO DO:
+ - implement multiple jumps as moves
 jump_test_board = np.array([
        [ 0, -1,  0, -1,  0, -1,  0, -1],
        [-1,  0, -1,  0, -1,  0, -1,  0],
@@ -11,6 +15,7 @@ jump_test_board = np.array([
        [-1,  0, -1,  0, -1,  0, -1,  0],
        [ 0, -1,  1, -1,  0, -1,  0, -1],
        [-1,  2, -1,  0, -1,  0, -1,  0]], dtype=np.int8)
+"""
 
 class Board():
 
@@ -38,6 +43,9 @@ class Board():
         else:
             self.load_state(state)
         self._update_masks()
+        self.log = logging.Logger('CHECKERS')
+        self.log.setLevel(logging.WARNING)
+        self.log.addHandler(logging.StreamHandler())
 
     def _update_masks(self):
         p1mask = (self.board == 1) | (self.board == 11)
@@ -59,16 +67,25 @@ class Board():
         return (tuple(self.board.flatten()), self.player, self.plays_without_capture)
 
     @staticmethod
-    def unpack_state(state):
+    def _unpack_state(state):
         board, player, plays_without_capture = state
         board = np.array(board).reshape((8, 8))
         return board, player, plays_without_capture
+    @staticmethod
+    def get_player(state):
+        return state[1]
 
     def load_state(self, state):
         """
         Given a state tuple, unpack it into the board
         """
-        self.board, self.player, self.plays_without_capture = self.unpack_state(state)
+        self.board, self.player, self.plays_without_capture = self._unpack_state(state)
+        if self.player == 1:
+            self.other = 2
+        elif self.player == 2:
+            self.other = 1
+        else:
+            raise Exception('This should not have happened...')
 
     def _row_moves(self, i, j):
         if self.board[i, j] > 10:
@@ -140,7 +157,7 @@ class Board():
         """
         if self.plays_without_capture >= 50:
             # it's a tie
-            print('tied')
+            self.log.info('tied')
             return ({1: 0.5, 2: 0.5}, None)
         else:
             available_moves = self.legal_moves()
@@ -181,6 +198,7 @@ class Board():
         else:
             self.plays_without_capture += 1
         self.board = board
+        self._switch_player()
 
     def display(self):
         """
@@ -195,6 +213,11 @@ class Board():
             -1: '\u001b[40m   ',  # black background
             'reset': '\u001b[0m',
         }
+        if self.player == 1:
+            pstring = '-' * 28 + '\nPlayer: red (1)'
+        else:
+            pstring = '-' * 28 +  '\nPlayer: black (2)'
+        print(pstring)
         picture = '\n'
         for i in range(self.board.shape[0] + 1):
             for j in range(self.board.shape[1] + 1):
@@ -210,27 +233,21 @@ class Board():
                     picture += ' {} '.format(i - 1)
                 else:
                     picture += chars[self.board[i - 1, j - 1]]
-            picture += '{}{}\n'.format(chars[-1], chars['reset'])
+            picture += '{}\n'.format(chars['reset'])
         print(picture)
-        if self.player == 1:
-            pstring = 'Player: red\n' + '-' * 28
-        else:
-            pstring = 'Player: black\n' + '-' * 28
-        print(pstring)
 
-    def run_random(self, pause=0.0):
+    def run_random(self, pause=0.0, display=False):
         """
         Run a whole game out, with each player randomly choosing amongst legal moves.
         """
         i = 0
         while True:
-            self.display()
+            if display:
+                self.display()
             won, legal_moves = self.win_or_moves()
             if won:
                 return won
             else:
                 self.single_move(*choice(legal_moves))
-                self._switch_player()
             i += 1
             sleep(pause)
-        print('Game length: {} moves'.format(i))
