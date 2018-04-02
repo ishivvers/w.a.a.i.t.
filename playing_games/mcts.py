@@ -147,13 +147,26 @@ class MCTS(object):
             self._update_stats(parent, winner)
             parent = self.tree[parent]['parent']
 
-    def run(self, t=10):
-        """Run the MCTS for <t> seconds"""
-        begin = datetime.datetime.utcnow()
-        dt = datetime.timedelta(seconds=t)
-        while (datetime.datetime.utcnow() - begin) < dt:
-            self.backpropagation(*self.selection_expansion_simulation())
-        self.log.info("After a run of {} seconds, played {} games.".format(t, self.tree[self.root]['plays']))
+    def run(self, event=None, t=10):
+        """
+        Run the MCTS
+
+        Args:
+            event (threading.Event): run the MCTS until this event is set
+            t (int): if no event is given, run the MCTS for <t> seconds
+        """
+        n_games = 0
+        if event is not None:
+            while not event.is_set():
+                self.backpropagation(*self.selection_expansion_simulation())
+                n_games += 1
+        else:
+            begin = datetime.datetime.utcnow()
+            dt = datetime.timedelta(seconds=t)
+            while (datetime.datetime.utcnow() - begin) < dt:
+                self.backpropagation(*self.selection_expansion_simulation())
+                n_games += 1
+        self.log.info("Played {} games.".format(n_games))
 
     def choose_play(self, state):
         """
