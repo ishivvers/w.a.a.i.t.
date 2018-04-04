@@ -3,6 +3,7 @@ from random import choice
 import logging
 from threading import Thread
 import numpy as np
+import pickle
 
 class MCTS(object):
     """
@@ -167,6 +168,18 @@ class MCTS(object):
                 self.backpropagation(*self.selection_expansion_simulation())
                 n_games += 1
         self.log.info("Played {} games.".format(n_games))
+
+    def save_tree(self, filename):
+        """
+        Save the current MCTS tree as a pickle file.
+        """
+        pickle.dump(self.tree, open(filename, 'wb'))
+
+    def load_tree(self, filename):
+        """
+        Load a saved pickle file of a MCTS tree.
+        """
+        self.tree = pickle.load(open(filename, 'rb'))
 
     def choose_play(self, state):
         """
