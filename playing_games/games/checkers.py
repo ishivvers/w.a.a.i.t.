@@ -1,4 +1,5 @@
 import numpy as np
+from copy import deepcopy
 from random import choice
 from time import sleep
 import logging
@@ -6,6 +7,7 @@ import logging
 """
 TO DO:
  - implement multiple jumps as moves
+ """
 jump_test_board = np.array([
        [ 0, -1,  0, -1,  0, -1,  0, -1],
        [-1,  0, -1,  0, -1,  0, -1,  0],
@@ -15,7 +17,6 @@ jump_test_board = np.array([
        [-1,  0, -1,  0, -1,  0, -1,  0],
        [ 0, -1,  1, -1,  0, -1,  0, -1],
        [-1,  2, -1,  0, -1,  0, -1,  0]], dtype=np.int8)
-"""
 
 class Board():
 
@@ -71,6 +72,7 @@ class Board():
         board, player, plays_without_capture = state
         board = np.array(board).reshape((8, 8))
         return board, player, plays_without_capture
+
     @staticmethod
     def get_player(state):
         return state[1]
@@ -105,10 +107,10 @@ class Board():
 
     def _possible_single_moves(self, i, j):
         """
-        returns list of available non-jumping moves, in the format
-          (start_position, end_position, position_jumped)
+        returns list of available non-jumping paths, in the format
+          [(start_position, end_position, position_jumped)]
         """
-        return [((i, j), (i + r, j + c), None)
+        return [[((i, j), (i + r, j + c), None)]
                  for r in self._row_moves(i, j)
                  for c in [-1, 1]
                  if min(i + r, j + c) >= 0
@@ -117,7 +119,7 @@ class Board():
 
     def _possible_single_jumps(self, i, j):
         """
-        returns list of available jumping moves, in the format
+        returns list of available single jump moves, in the format
           (start_position, end_position, position_jumped)
         """
         possibilities = []
@@ -127,10 +129,41 @@ class Board():
                (i + r, j + 1) in self.others and (i + 2*r, j + 2) not in self.occupied:
                 possibilities += [((i, j), (i + 2*r, j + 2), (i + r, j + 1))]
             # jumping to the left
-            elif (i + 2*r < 8 and i + 2*r >= 0 and j > 1) and\
+            if (i + 2*r < 8 and i + 2*r >= 0 and j > 1) and\
                  (i + r, j - 1) in self.others and (i + 2*r, j - 2) not in self.occupied:
                 possibilities += [((i, j), (i + 2*r, j - 2), (i + r, j - 1))]
         return possibilities
+
+    def _possible_jump_moves(self, i, j):
+        """
+        returns list of available jumping paths,
+          in the format [[move1, move2, ...],
+                         [move1, move2, ...],
+                         ...]
+        """
+        working_board = Board(state=self.state())
+        possible_paths = [[p, ] for p in self._possible_single_jumps(i, j)]
+        while not all(p[-1] == None for p in possible_paths):
+            for path in possible_paths:
+                if path[-1] is None:
+                    continue
+                working_board.load_state(self.state())
+                # walk down this path again
+                for move in path:
+                    working_board.single_move(*move)
+                working_board._update_masks()
+                next_jumps = working_board._possible_single_jumps(*path[-1][1])
+                if not next_jumps:
+                    path.append(None)
+                else:
+                    base_path = deepcopy(path)
+                    for i_jump, move in enumerate(next_jumps):
+                        if i_jump == 0:
+                            path += [move]
+                        else:
+                            possible_paths.append(base_path + [move])
+        return [p[:-1] for p in possible_paths]  # strip the None off
+
 
     def legal_moves(self):
         """
@@ -143,7 +176,7 @@ class Board():
         possibilities = []
         # find all possible jump moves first
         for i, j in self.pieces:
-            possibilities += self._possible_single_jumps(i, j)
+            possibilities += self._possible_jump_moves(i, j)
         # if no jump moves exist, search for normal moves
         if not possibilities:
             for i, j in self.pieces:
@@ -198,6 +231,13 @@ class Board():
         else:
             self.plays_without_capture += 1
         self.board = board
+
+    def make_moves(self, path):
+        """
+        Given a path (a list of moves), make them all and update the board
+        """
+        for move in path:
+            self.single_move(*move)
         self._switch_player()
 
     def display(self):
@@ -248,6 +288,6 @@ class Board():
             if won:
                 return won
             else:
-                self.single_move(*choice(legal_moves))
+                self.make_moves(choice(legal_moves))
             i += 1
             sleep(pause)

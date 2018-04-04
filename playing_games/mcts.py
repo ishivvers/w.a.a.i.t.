@@ -75,9 +75,9 @@ class MCTS(object):
         children_nodes = []
         self.board.load_state(state)
         legal_moves = self.board.legal_moves()
-        for move in legal_moves:
+        for path in legal_moves:
             self.board.load_state(state)
-            self.board.single_move(*move)
+            self.board.make_moves(path)
             next_state = self.board.state()
             children_nodes.append(next_state)
         self.board.load_state(state)
