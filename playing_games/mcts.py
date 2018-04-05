@@ -183,8 +183,14 @@ class MCTS(object):
 
     def choose_play(self, state):
         """
-        Given a board state, choose the next play based upon the MC tree in memory
+        Given a board state, choose the next play based upon the MC tree in memory, if possible,
+          or a random choice, if not possible.
         """
-        plays = np.array([self.tree[child]['plays'] for child in self.tree[state]['children']])
-        wins = np.array([self.tree[child]['wins'] for child in self.tree[state]['children']])
-        return self.tree[state]['moves'][np.argmax(wins / plays)]
+        try:
+            plays = np.array([self.tree[child]['plays'] for child in self.tree[state]['children']])
+            wins = np.array([self.tree[child]['wins'] for child in self.tree[state]['children']])
+            return self.tree[state]['moves'][np.argmax(wins / plays)]
+        except KeyError:
+            self.log.warning('Hit an unexplored node! Choosing a random play')
+            self.board.load_state(state)
+            return choice(self.board.legal_moves())

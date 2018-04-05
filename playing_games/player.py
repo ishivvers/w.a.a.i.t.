@@ -16,7 +16,7 @@ class player(object):
     the MCTS tree population, use it to predict a move, and then restart the tree
     from that position.
     """
-    def __init__(self, time_allowed=10,
+    def __init__(self, time_allowed=5,
                  player_id=2, game_id='game_1', server_address=('localhost', 4242)):
         """
         Args:
@@ -42,6 +42,7 @@ class player(object):
         """
         Given a board state, find the next move to take
         """
+        print('thinking ...')
         sleep(self.time_allowed)
         # stop updating the tree in the background
         self.event.set()
@@ -52,7 +53,9 @@ class player(object):
         self.board.load_state(board_state)
         self.board.display()
         self.board.make_moves(play)
+        print('Making move: {}'.format(play))
         self.board.display()
+        print('\n' * 3)
         self.mcts_thread = threading.Thread(target=self._start_er_up, args=(self.board.state(), ))
         self.mcts_thread.start()
         return play
@@ -70,39 +73,43 @@ class player(object):
             response['game_state']['moves_without_capture']
         )
 
+    @staticmethod
+    def _translate_coords(coords):
+        return int(8 - coords[0]), int(coords[1] + 1)
+
     def _play2json(self, path):
         play_array = []
         for move in path:
-            play_array.append([int(idx) for idx in move[0]])
-        play_array.append([int(idx) for idx in path[-1][1]])
+            play_array.append(self._translate_coords(move[0]))
+        play_array.append(self._translate_coords(path[-1][1]))
         out = {'command': 'move', 'game_id': str(self.game_id), 'player': self.player,
                'move': play_array}
-        return dumps(out).encode('utf-8')
+        return dumps(out)
 
     def perform_next_play(self, response):
         play = self.get_next_play(self._response2state(response))
         send_json = self._play2json(play)
-        print('sending {}'.format(send_json))
-        self.socket.send(send_json)
+        self.socket.send((send_json + '\n').encode('utf-8'))
 
     def join_game(self):
-        self.socket.send('{}\n'.format(
-            dumps({'command': 'join', 'game_id': str(self.game_id), 'player': self.player})).encode('utf-8'))
-        response = loads(self.socket.recv(2048))
-        assert(response['result'] == 'ok')
-        return response
+        send_json = dumps({'command': 'join', 'game_id': str(self.game_id), 'player': self.player})
+        self.socket.send((send_json + '\n').encode('utf-8'))
 
     def get_game_status(self):
-        response = loads(self.socket.recv(2048))
-        print('got: {}'.format(response))
+        response = b''
+        while b'\n' not in response:
+            response += self.socket.recv(1)
+        response = loads(response)
         assert(response['result'] == 'ok')
         return response
 
     def run(self):
-        response = self.join_game()
-        if response['game_state']['turn'] == self.player:
-            self.perform_next_play(response)
+        self.join_game()
         while True:
             response = self.get_game_status()
             if response['game_state']['turn'] == self.player:
                 self.perform_next_play(response)
+
+if __name__ == '__main__':
+    p = player()
+    p.run()
