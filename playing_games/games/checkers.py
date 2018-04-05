@@ -4,19 +4,6 @@ from random import choice
 from time import sleep
 import logging
 
-"""
-TO DO:
- - implement multiple jumps as moves
- """
-jump_test_board = np.array([
-       [ 0, -1,  0, -1,  0, -1,  0, -1],
-       [-1,  0, -1,  0, -1,  0, -1,  0],
-       [ 0, -1,  0, -1,  0, -1,  1, -1],
-       [-1,  0, -1,  0, -1,  0, -1,  0],
-       [ 0, -1,  1, -1,  1, -1,  0, -1],
-       [-1,  0, -1,  0, -1,  0, -1,  0],
-       [ 0, -1,  1, -1,  0, -1,  0, -1],
-       [-1,  2, -1,  0, -1,  0, -1,  0]], dtype=np.int8)
 
 class Board():
 
