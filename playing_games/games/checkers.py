@@ -4,6 +4,8 @@ from random import choice
 from time import sleep
 import logging
 
+COLS, ROWS = np.meshgrid(range(8), range(8))
+
 
 class Board():
 
@@ -13,7 +15,6 @@ class Board():
             state: the state of the board.
                    if not given, initializes a new game board.
         """
-        self.cols, self.rows = np.meshgrid(range(8), range(8))
         if state is None:
             self.board = np.zeros((8, 8), dtype=np.int8)
             # mask out the unavailable spots, and put pieces down
@@ -44,8 +45,8 @@ class Board():
         else:
             pmask = p2mask
             omask = p1mask
-        self.pieces = set(zip(*(self.rows[pmask], self.cols[pmask])))
-        self.others = set(zip(*(self.rows[omask], self.cols[omask])))
+        self.pieces = set(zip(*(ROWS[pmask], COLS[pmask])))
+        self.others = set(zip(*(ROWS[omask], COLS[omask])))
         self.occupied = self.pieces.union(self.others)
 
     def state(self):
@@ -75,15 +76,16 @@ class Board():
             self.other = 1
         else:
             raise Exception('This should not have happened...')
+        self._update_masks()
 
-    def _row_moves(self, i, j):
-        if self.board[i, j] > 10:
+    def _row_moves(self, piece):
+        if piece > 10:
             # is kinged, can move either way
             return [-1, 1]
-        elif self.board[i, j] == 1:
+        elif piece == 1:
             # can only move down
             return [1]
-        elif self.board[i, j] == 2:
+        elif piece == 2:
             # can only move up
             return [-1]
         else:
@@ -98,7 +100,7 @@ class Board():
           [(start_position, end_position, position_jumped)]
         """
         return [[((i, j), (i + r, j + c), None)]
-                 for r in self._row_moves(i, j)
+                 for r in self._row_moves(self.board[i, j])
                  for c in [-1, 1]
                  if min(i + r, j + c) >= 0
                  and max(i + r, j + c) < 8
@@ -110,7 +112,7 @@ class Board():
           (start_position, end_position, position_jumped)
         """
         possibilities = []
-        for r in self._row_moves(i, j):
+        for r in self._row_moves(self.board[i, j]):
             # jumping to the right
             if (i + 2*r < 8 and i + 2*r >= 0 and j < 6) and\
                (i + r, j + 1) in self.others and (i + 2*r, j + 2) not in self.occupied:
@@ -128,14 +130,21 @@ class Board():
                          [move1, move2, ...],
                          ...]
         """
-        working_board = Board(state=self.state())
         possible_paths = [[p, ] for p in self._possible_single_jumps(i, j)]
+        # bail early if there are not jump moves at all
+        if not possible_paths:
+            return []
+        # otherwise start mapping out multijumps
+        starting_state = self.state()
+        working_board = Board(starting_state)
+        needs_reload = False  # only need to reload after the first time through
         while not all(p[-1] == None for p in possible_paths):
-            for path in possible_paths:
+            for i_path, path in enumerate(possible_paths):
                 if path[-1] is None:
                     continue
-                working_board.load_state(self.state())
                 # walk down this path again
+                if needs_reload:
+                    working_board.load_state(starting_state)
                 for move in path:
                     working_board.single_move(*move)
                 working_board._update_masks()
@@ -148,7 +157,8 @@ class Board():
                         if i_jump == 0:
                             path += [move]
                         else:
-                            possible_paths.append(base_path + [move])
+                            possible_paths.append(deepcopy(base_path) + [move])
+                needs_reload = True
         return [p[:-1] for p in possible_paths]  # strip the None off
 
 

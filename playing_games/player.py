@@ -108,7 +108,11 @@ class player(object):
         while True:
             response = self.get_game_status()
             if response['game_state']['turn'] == self.player:
-                self.perform_next_play(response)
+                try:
+                    self.perform_next_play(response)
+                except ValueError:
+                    print('game over, man')
+                    return
 
 if __name__ == '__main__':
     p = player()
