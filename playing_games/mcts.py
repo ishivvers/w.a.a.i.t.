@@ -1,4 +1,5 @@
 import datetime
+from copy import copy
 from random import choice
 import logging
 from threading import Thread
@@ -9,7 +10,7 @@ class MCTS(object):
     """
     Monte Carlo Tree Search
     """
-    def __init__(self, board, root=None, tree=None):
+    def __init__(self, board, root=None, tree={}):
         """
         Args:
             board: an instance of the board class, having the appropriate API.
@@ -19,7 +20,7 @@ class MCTS(object):
                 runs.  If not given, will instantiate a new tree starting from the root.
         """
         self.log = logging.Logger('MCTS')
-        self.log.setLevel(logging.INFO)
+        self.log.setLevel(logging.WARNING)
         self.log.addHandler(logging.StreamHandler())
 
         self.board = board
@@ -28,30 +29,19 @@ class MCTS(object):
         else:
             self.root = root
         children, moves = self._get_children_moves(self.root)
-        if tree == None:
-            self.tree = {self.root: {
+        self.tree = tree
+        if self.root not in self.tree:
+            self.tree[self.root] = {
                 'parent': None,
                 'children': children,
                 'moves': moves,
                 'plays': 0,
                 'wins': 0,
                 'depth': 0,
-                }
             }
-        else:
-            self.tree = tree
-            if self.root not in self.tree:
-                self.tree[self.root] = {
-                    'parent': None,
-                    'children': children,
-                    'moves': moves,
-                    'plays': 0,
-                    'wins': 0,
-                    'depth': 0,
-                }
-            if not self.tree[self.root].get('children'):
-                self.tree[self.root]['children'] = children
-                self.tree[self.root]['moves'] = moves
+        elif not self.tree[self.root].get('children'):
+            self.tree[self.root]['children'] = children
+            self.tree[self.root]['moves'] = moves
 
     def _print_branch(self, branch):
         print('\n{}: (player: {}) \n parent: {}\n children: {}\n depth: {}\n wins/plays: {}/{}'.format(
@@ -130,6 +120,7 @@ class MCTS(object):
         # if we got here, that means we've traversed the tree to a leaf and nobody's won yet
         self.log.debug('Running a random playout')
         winner = self.board.run_random()
+        self.log.debug('Winner: %s', winner)
         return branch, winner
 
     def _update_stats(self, branch, winner):
@@ -148,17 +139,37 @@ class MCTS(object):
             self._update_stats(parent, winner)
             parent = self.tree[parent]['parent']
 
-    def run(self, event=None, t=10):
+    def update_tree_from(self, other_tree):
+        """
+        Given another tree, update the internal tree representation
+        with its values.
+        """
+        for branch in other_tree:
+            if branch in self.tree:
+                self.log.debug('Updating {}'.format(id(branch)))
+                self.tree[branch]['plays'] += other_tree[branch]['plays']
+                self.tree[branch]['wins'] += other_tree[branch]['wins']
+            else:
+                self.log.debug('Including {}'.format(id(branch)))
+                self.tree[branch] = copy(other_tree[branch])
+
+    def run(self, event=None, n=None, t=10):
         """
         Run the MCTS
 
         Args:
             event (threading.Event): run the MCTS until this event is set
-            t (int): if no event is given, run the MCTS for <t> seconds
+            n (int): if given, will run the MCTS for this many iterations
+            t (int): run the MCTS for <t> seconds. defaults to 10 s if no other args are given.
+            Order of preference: event, n, t
         """
         n_games = 0
         if event is not None:
             while not event.is_set():
+                self.backpropagation(*self.selection_expansion_simulation())
+                n_games += 1
+        elif n is not None:
+            for _ in range(n):
                 self.backpropagation(*self.selection_expansion_simulation())
                 n_games += 1
         else:
@@ -168,6 +179,7 @@ class MCTS(object):
                 self.backpropagation(*self.selection_expansion_simulation())
                 n_games += 1
         self.log.info("Played {} games.".format(n_games))
+        self.log.debug("Size of tree: {}.".format(len(self.tree)))
 
     def save_tree(self, filename):
         """
@@ -185,11 +197,14 @@ class MCTS(object):
         """
         Given a board state, choose the next play based upon the MC tree in memory, if possible,
           or a random choice, if not possible.
+        Each level of the tree keeps win/play stats for that level's current player,
+          so here we choose the move that moves us to the child node from which the other
+          player has won the least.
         """
         try:
             plays = np.array([self.tree[child]['plays'] for child in self.tree[state]['children']])
-            wins = np.array([self.tree[child]['wins'] for child in self.tree[state]['children']])
-            return self.tree[state]['moves'][np.argmax(wins / plays)]
+            losses = np.array([self.tree[child]['wins'] for child in self.tree[state]['children']])
+            return self.tree[state]['moves'][np.argmin(losses / plays)]
         except KeyError:
             self.log.warning('Hit an unexplored node! Choosing a random play')
             self.board.load_state(state)

@@ -1,5 +1,5 @@
 import numpy as np
-from copy import deepcopy
+from copy import copy
 from random import choice
 from time import sleep
 import logging
@@ -152,12 +152,12 @@ class Board():
                 if not next_jumps:
                     path.append(None)
                 else:
-                    base_path = deepcopy(path)
+                    base_path = copy(path)
                     for i_jump, move in enumerate(next_jumps):
                         if i_jump == 0:
                             path += [move]
                         else:
-                            possible_paths.append(deepcopy(base_path) + [move])
+                            possible_paths.append(copy(base_path) + [move])
                 needs_reload = True
         return [p[:-1] for p in possible_paths]  # strip the None off
 
