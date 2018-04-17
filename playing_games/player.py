@@ -1,4 +1,4 @@
-import threading
+import multiprocessing
 from copy import copy
 from json import dumps, loads
 import socket
@@ -112,39 +112,43 @@ class mcts_player(player):
     from that position.
     """
     def __init__(self, player_id, game_id, server_address=('localhost', 4242),
-                 time_allowed=5, n_threads=1):
+                 time_allowed=5, n_threads=3):
         """
         Args:
             time_allowed (int): time allowed for thinking before a response is required
             n_threads (int): number of worker MCTS threads to spin up
         """
         super().__init__(player_id, game_id, server_address=('localhost', 4242))
-        self.event = threading.Event()
+        self.event = multiprocessing.Event()
         self.event.clear()
         self.time_allowed = time_allowed
         self.n_threads = n_threads
         self.tree_keeper = mcts.MCTS(checkers.Board())  # holds the merged tree
         self.mcts_threads = [None] * self.n_threads  # holds the pointers to worker threads
-        self.thread_trees = [{} for _ in range(self.n_threads)]  # holds the trees built by worker threads
+        self.thread_pipes = [None for _ in range(self.n_threads)]  # holds the pipes to workers
         self._start_threads()
 
-    def _run_from(self, root, tree):
-        MC = mcts.MCTS(checkers.Board(), tree=tree, root=root)
+    def _run_from(self, root, pipe):
+        MC = mcts.MCTS(checkers.Board(), root=root, tree={})
         MC.run(event=self.event)
+        pipe.send(MC.tree)
+        pipe.close()
 
     def _start_threads(self, root=None):
         self.event.clear()
         for i in range(self.n_threads):
-            self.thread_trees[i] = {}
-            self.mcts_threads[i] = threading.Thread(target=self._run_from,
-                                                    args=(root, self.thread_trees[i]))
+            parent_conn, child_conn = multiprocessing.Pipe()
+            self.thread_pipes[i] = parent_conn
+            self.mcts_threads[i] = multiprocessing.Process(target=self._run_from,
+                                                           args=(root, child_conn))
             self.mcts_threads[i].start()
 
     def _stop_threads(self):
         self.event.set()
         for i in range(self.n_threads):
+            worker_tree = self.thread_pipes[i].recv()
+            self.tree_keeper.update_tree_from(worker_tree)
             self.mcts_threads[i].join()
-            self.tree_keeper.update_tree_from(self.thread_trees[i])
 
     def get_next_play(self, board_state):
         """

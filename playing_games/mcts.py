@@ -151,7 +151,7 @@ class MCTS(object):
                 self.tree[branch]['wins'] += other_tree[branch]['wins']
             else:
                 self.log.debug('Including {}'.format(id(branch)))
-                self.tree[branch] = copy(other_tree[branch])
+                self.tree[branch] = other_tree[branch]
 
     def run(self, event=None, n=None, t=10):
         """
@@ -179,7 +179,7 @@ class MCTS(object):
                 self.backpropagation(*self.selection_expansion_simulation())
                 n_games += 1
         self.log.info("Played {} games.".format(n_games))
-        self.log.debug("Size of tree: {}.".format(len(self.tree)))
+        self.log.info("Size of tree: {}.".format(len(self.tree)))
 
     def save_tree(self, filename):
         """
