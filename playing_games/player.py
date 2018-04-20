@@ -112,21 +112,23 @@ class mcts_player(player):
     from that position.
     """
     def __init__(self, player_id, game_id, server_address=('localhost', 4242),
-                 time_allowed=5, n_threads=3):
+                 time_allowed=5, n_threads=3, tree_file='trees/tree_9h.p'):
         """
         Args:
             time_allowed (int): time allowed for thinking before a response is required
             n_threads (int): number of worker MCTS threads to spin up
         """
-        super().__init__(player_id, game_id, server_address=('localhost', 4242))
         self.event = multiprocessing.Event()
         self.event.clear()
         self.time_allowed = time_allowed
         self.n_threads = n_threads
         self.tree_keeper = mcts.MCTS(checkers.Board())  # holds the merged tree
+        if tree_file is not None:
+            self.tree_keeper.load_tree(tree_file)
         self.mcts_threads = [None] * self.n_threads  # holds the pointers to worker threads
         self.thread_pipes = [None for _ in range(self.n_threads)]  # holds the pipes to workers
         self._start_threads()
+        super().__init__(player_id, game_id, server_address=server_address)
 
     def _run_from(self, root, pipe):
         MC = mcts.MCTS(checkers.Board(), root=root, tree={})
