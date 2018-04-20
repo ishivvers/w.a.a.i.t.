@@ -2,7 +2,6 @@ import datetime
 from copy import copy
 from random import choice
 import logging
-from threading import Thread
 import numpy as np
 import pickle
 
