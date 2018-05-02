@@ -2,6 +2,7 @@ import numpy as np
 from copy import copy
 from random import choice
 from time import sleep
+from numba import jit
 import logging
 
 COLS, ROWS = np.meshgrid(range(8), range(8))
@@ -78,19 +79,6 @@ class Board():
             raise Exception('This should not have happened...')
         self._update_masks()
 
-    def _row_moves(self, piece):
-        if piece > 10:
-            # is kinged, can move either way
-            return [-1, 1]
-        elif piece == 1:
-            # can only move down
-            return [1]
-        elif piece == 2:
-            # can only move up
-            return [-1]
-        else:
-            raise Exception('This should not have happened...')
-
     def _switch_player(self):
         self.player, self.other = self.other, self.player
 
@@ -100,7 +88,7 @@ class Board():
           [(start_position, end_position, position_jumped)]
         """
         return [[((i, j), (i + r, j + c), None)]
-                 for r in self._row_moves(self.board[i, j])
+                 for r in _row_moves(self.board[i, j])
                  for c in [-1, 1]
                  if min(i + r, j + c) >= 0
                  and max(i + r, j + c) < 8
@@ -112,7 +100,7 @@ class Board():
           (start_position, end_position, position_jumped)
         """
         possibilities = []
-        for r in self._row_moves(self.board[i, j]):
+        for r in _row_moves(self.board[i, j]):
             # jumping to the right
             if (i + 2*r < 8 and i + 2*r >= 0 and j < 6) and\
                (i + r, j + 1) in self.others and (i + 2*r, j + 2) not in self.occupied:
@@ -288,3 +276,17 @@ class Board():
                 self.make_moves(choice(legal_moves))
             i += 1
             sleep(pause)
+
+@jit
+def _row_moves(piece):
+    if piece > 10:
+        # is kinged, can move either way
+        return [-1, 1]
+    elif piece == 1:
+        # can only move down
+        return [1]
+    elif piece == 2:
+        # can only move up
+        return [-1]
+    else:
+        raise Exception('This should not have happened...')
